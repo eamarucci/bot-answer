@@ -1,5 +1,5 @@
 {
-  "name": "aianswer-bot",
+  "name": "bot-answer",
   "version": "1.0.0",
   "description": "Matrix bot for AI-powered answers using OpenRouter API",
   "type": "module",

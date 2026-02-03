@@ -55,8 +55,8 @@ export async function createChatCompletion(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${config.openRouter.apiKey}`,
-        "HTTP-Referer": "https://github.com/aianswer-bot",
-        "X-Title": "AiAnswerBot",
+        "HTTP-Referer": "https://github.com/eamarucci/bot-answer",
+        "X-Title": "BotAnswer",
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,

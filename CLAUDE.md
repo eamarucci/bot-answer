@@ -1,8 +1,8 @@
-# AiAnswerBot - Contexto para Claude
+# BotAnswer - Contexto para Claude
 
 ## Visao Geral
 
-Bot para Matrix que responde perguntas usando LLMs via OpenRouter API. Configuracao de modelo e system prompt e persistida por sala.
+Bot para Matrix que responde perguntas usando LLMs via OpenRouter API. Configuracao de modelo e system prompt e persistida por sala. Suporta analise de imagens e videos.
 
 ## Comandos de Desenvolvimento
 
@@ -32,7 +32,8 @@ src/
 ├── matrix/
 │   ├── client.ts            # Cliente Matrix (conexao, lifecycle)
 │   ├── handlers.ts          # Handler de mensagens recebidas
-│   └── context.ts           # Busca contexto (reply chain + recentes)
+│   ├── context.ts           # Busca contexto (reply chain + recentes)
+│   └── image.ts             # Download de imagens/videos do Matrix
 ├── commands/
 │   ├── index.ts             # Router de comandos
 │   ├── parser.ts            # Parser de comandos e flags
@@ -59,13 +60,13 @@ src/
 
 | Comando | Descricao |
 |---------|-----------|
-| `/ai <mensagem>` | Envia pergunta para a LLM |
-| `/ai -set <modelo>` | Define modelo da sala |
-| `/ai -prompt <texto>` | Define system prompt da sala |
-| `/ai -modelos` | Lista modelos disponiveis |
-| `/ai -config` | Mostra configuracao da sala |
-| `/ai -reset` | Reseta configuracao para padroes |
-| `/ai -ajuda` | Mostra ajuda |
+| `/ia <mensagem>` | Envia pergunta para a LLM |
+| `/ia -set <modelo>` | Define modelo da sala |
+| `/ia -prompt <texto>` | Define system prompt da sala |
+| `/ia -modelos` | Lista modelos disponiveis |
+| `/ia -config` | Mostra configuracao da sala |
+| `/ia -reset` | Reseta configuracao para padroes |
+| `/ia -ajuda` | Mostra ajuda |
 
 ## Sistema de Aliases de Modelos
 
@@ -76,8 +77,24 @@ Os modelos sao chamados por aliases curtos em vez de IDs completos:
 | `auto` | `openrouter/free` | Escolhe entre modelos gratuitos |
 | `deepseek` | `deepseek/deepseek-r1-0528:free` | Raciocinio avancado |
 | `llama` | `meta-llama/llama-3.3-70b-instruct:free` | Meta Llama 3.3 70B |
+| `vision` | `nvidia/nemotron-nano-12b-v2-vl:free` | Analise de imagens/videos |
 
 Para adicionar/modificar modelos, edite `src/llm/model-aliases.ts`.
+
+## Analise de Imagens e Videos
+
+O bot detecta automaticamente quando o comando `/ia` e um reply para uma imagem ou video:
+
+- **Imagens**: Baixa, converte para base64 e envia para o modelo de vision
+- **Videos**: Baixa, converte para base64 e envia (limite: 20MB)
+- O modelo de vision e usado automaticamente quando midia e detectada
+
+## System Prompts
+
+O sistema usa dois prompts:
+
+1. **BASE_SYSTEM_PROMPT** (fixo): Regras de formatacao (max 4 frases, sem listas)
+2. **DEFAULT_SYSTEM_PROMPT** (editavel via `/ia -prompt`): Contexto adicional
 
 ## Fluxo de Contexto
 
@@ -85,6 +102,7 @@ O bot monta contexto de conversa para enviar ao LLM:
 
 1. **Com reply**: Segue a cadeia de replies para construir contexto
 2. **Sem reply**: Busca ultimas N mensagens da sala
+3. **Com midia**: Nao inclui contexto anterior, foca na imagem/video
 
 ### Limites de Contexto
 
@@ -115,7 +133,7 @@ O bot monta contexto de conversa para enviar ao LLM:
 # Matrix
 MATRIX_HOMESERVER_URL=https://matrix.marucci.cloud
 MATRIX_ACCESS_TOKEN=syt_xxx
-MATRIX_USER_ID=@aianswer-bot:matrix.marucci.cloud
+MATRIX_USER_ID=@bot-answer:matrix.marucci.cloud
 
 # OpenRouter
 OPENROUTER_API_KEY=sk-or-xxx
@@ -123,12 +141,16 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 # Models
 DEFAULT_MODEL=openrouter/free
+VISION_MODEL=nvidia/nemotron-nano-12b-v2-vl:free
+
+# System Prompts
+BASE_SYSTEM_PROMPT=LIMITE ABSOLUTO: 4 frases...
+DEFAULT_SYSTEM_PROMPT=Voce e um assistente de chat prestativo.
 
 # LLM Settings
-MAX_TOKENS=1000
+MAX_TOKENS=2000
 TIMEOUT_MS=60000
 INCLUDE_REASONING=false
-DEFAULT_SYSTEM_PROMPT=Voce e um assistente prestativo...
 
 # Context
 CONTEXT_MAX_MESSAGES=10
@@ -137,7 +159,7 @@ CONTEXT_MAX_AGE_MINUTES=30
 # Bot
 BOT_STATE_FILE=data/bot-state.json
 ROOM_SETTINGS_FILE=data/room-settings.json
-COMMAND_PREFIX=/ai
+COMMAND_PREFIX=/ia
 LOG_LEVEL=info
 ```
 
@@ -152,58 +174,65 @@ POST https://openrouter.ai/api/v1/chat/completions
 ```
 Authorization: Bearer sk-or-xxx
 Content-Type: application/json
-HTTP-Referer: https://matrix.marucci.cloud
-X-Title: AiAnswerBot
+HTTP-Referer: https://github.com/eamarucci/bot-answer
+X-Title: BotAnswer
 ```
 
-### Request Body
+### Request Body (texto)
 ```json
 {
   "model": "openrouter/free",
   "messages": [
     {"role": "system", "content": "..."},
-    {"role": "user", "content": "..."},
-    {"role": "assistant", "content": "..."}
+    {"role": "user", "content": "..."}
   ],
-  "max_tokens": 1000
+  "max_tokens": 2000
+}
+```
+
+### Request Body (imagem)
+```json
+{
+  "model": "nvidia/nemotron-nano-12b-v2-vl:free",
+  "messages": [
+    {"role": "system", "content": "..."},
+    {"role": "user", "content": [
+      {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}},
+      {"type": "text", "text": "Descreva esta imagem."}
+    ]}
+  ]
 }
 ```
 
 ## Deploy
 
-### Build e Push (se usar Docker)
+### Build e Push Docker
 
 ```bash
-cd /home/evandro/projects/matrix/aianswer-bot
-docker build -t eamarucci/aianswer-bot:latest .
-docker push eamarucci/aianswer-bot:latest
+cd /home/evandro/projects/bot/answer
+docker build -t eamarucci/bot-answer:latest .
+docker push eamarucci/bot-answer:latest
 ```
 
-### Execucao Direta
+### Gerar Token Matrix
 
 ```bash
-npm run build
-npm start
-```
-
-### Com PM2
-
-```bash
-pm2 start dist/index.js --name aianswer-bot
+./scripts/get-token.sh --help
+./scripts/get-token.sh -h https://matrix.example.com -u @bot:example.com -p senha
 ```
 
 ### Docker Compose
 
 ```yaml
 services:
-  aianswer-bot:
-    image: eamarucci/aianswer-bot:latest
-    container_name: aianswer-bot
+  bot-answer:
+    image: eamarucci/bot-answer:latest
+    container_name: bot-answer
     restart: unless-stopped
-    env_file:
-      - .env
     volumes:
       - ./data:/app/data
+    networks:
+      - infra-network
 
 networks:
   infra-network:
@@ -217,7 +246,7 @@ networks:
 - **Contexto vazio**: Verificar `CONTEXT_MAX_AGE_MINUTES`
 - **Timeout**: Aumentar `TIMEOUT_MS` ou usar modelo mais rapido
 - **Resposta cortada**: Aumentar `MAX_TOKENS`
-- **Reasoning nao aparece**: Verificar `INCLUDE_REASONING=true`
+- **Imagem nao analisa**: Verificar se VISION_MODEL esta configurado
 
 ## Padroes de Codigo
 
@@ -227,13 +256,7 @@ networks:
 - Fetch nativo para requisicoes HTTP
 - Tratamento de erros com mensagens amigaveis para usuario
 
-## Relacionamento com Outros Bots
+## Repositorios
 
-Este bot e independente do `aiimg-bot`. Cada um tem funcao especifica:
-
-| Bot | Funcao | Comando |
-|-----|--------|---------|
-| `aianswer-bot` | Perguntas para LLM | `/ai` |
-| `aiimg-bot` | Geracao de imagens | `/img` |
-
-Ambos podem coexistir na mesma sala sem conflito.
+- **GitHub**: https://github.com/eamarucci/bot-answer
+- **Docker Hub**: eamarucci/bot-answer

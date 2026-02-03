@@ -1,4 +1,4 @@
-# AiAnswerBot
+# BotAnswer
 
 Bot para Matrix que utiliza a API do OpenRouter para responder perguntas usando diversas LLMs.
 
@@ -14,13 +14,13 @@ Bot para Matrix que utiliza a API do OpenRouter para responder perguntas usando 
 
 | Comando | Descricao |
 |---------|-----------|
-| `/ai <mensagem>` | Envia uma pergunta para a IA |
-| `/ai -set <modelo>` | Define o modelo de IA para esta sala |
-| `/ai -prompt <texto>` | Define o system prompt para esta sala |
-| `/ai -modelos` | Lista os modelos disponiveis |
-| `/ai -config` | Mostra a configuracao atual da sala |
-| `/ai -reset` | Reseta a configuracao da sala para os padroes |
-| `/ai -ajuda` | Mostra ajuda dos comandos |
+| `/ia <mensagem>` | Envia uma pergunta para a IA |
+| `/ia -set <modelo>` | Define o modelo de IA para esta sala |
+| `/ia -prompt <texto>` | Define o system prompt para esta sala |
+| `/ia -modelos` | Lista os modelos disponiveis |
+| `/ia -config` | Mostra a configuracao atual da sala |
+| `/ia -reset` | Reseta a configuracao da sala para os padroes |
+| `/ia -ajuda` | Mostra ajuda dos comandos |
 
 ## Modelos Disponiveis
 
@@ -30,7 +30,7 @@ Bot para Matrix que utiliza a API do OpenRouter para responder perguntas usando 
 | `deepseek` | deepseek/deepseek-r1-0528:free | DeepSeek R1 (raciocinio avancado) |
 | `llama` | meta-llama/llama-3.3-70b-instruct:free | Llama 3.3 70B da Meta |
 
-Exemplo: `/ai -set deepseek`
+Exemplo: `/ia -set deepseek`
 
 ## Configuracao
 
@@ -89,21 +89,21 @@ Exemplo: `/ai -set deepseek`
 | `CONTEXT_MAX_AGE_MINUTES` | Idade max das mensagens | `30` |
 | `BOT_STATE_FILE` | Arquivo de estado do sync | `data/bot-state.json` |
 | `ROOM_SETTINGS_FILE` | Arquivo de config por sala | `data/room-settings.json` |
-| `COMMAND_PREFIX` | Prefixo do comando | `/ai` |
+| `COMMAND_PREFIX` | Prefixo do comando | `/ia` |
 | `LOG_LEVEL` | Nivel de log | `info` |
 
 ## Contexto de Mensagens
 
 O bot mantem contexto de duas formas:
 
-1. **Reply chain**: Quando voce responde a uma mensagem com `/ai`, o bot inclui a cadeia de respostas como contexto.
+1. **Reply chain**: Quando voce responde a uma mensagem com `/ia`, o bot inclui a cadeia de respostas como contexto.
 
 2. **Mensagens recentes**: Quando nao ha reply, o bot inclui as ultimas mensagens da sala (configuravel via `CONTEXT_MAX_MESSAGES` e `CONTEXT_MAX_AGE_MINUTES`).
 
 ## Estrutura do Projeto
 
 ```
-aianswer-bot/
+bot-answer/
 ├── src/
 │   ├── index.ts                 # Entry point
 │   ├── config.ts                # Configuracao com Zod
