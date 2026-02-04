@@ -214,13 +214,6 @@ docker build -t eamarucci/bot-answer:latest .
 docker push eamarucci/bot-answer:latest
 ```
 
-### Gerar Token Matrix
-
-```bash
-./scripts/get-token.sh --help
-./scripts/get-token.sh -h https://matrix.example.com -u @bot:example.com -p senha
-```
-
 ### Docker Compose
 
 ```yaml
@@ -229,14 +222,68 @@ services:
     image: eamarucci/bot-answer:latest
     container_name: bot-answer
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
-      - ./data:/app/data
+      - bot-answer-data:/app/data
     networks:
       - infra-network
+
+volumes:
+  bot-answer-data:
 
 networks:
   infra-network:
     external: true
+```
+
+## Scripts de Administracao
+
+Scripts compartilhados em `~/projects/bot/scripts/`:
+
+| Script | Descricao |
+|--------|-----------|
+| `create-bot-user.sh <username>` | Cria bot (user_type=bot) e gera access token |
+| `delete-user.sh <username>` | Deleta usuario |
+| `list-bots.sh` | Lista todos os bots |
+| `list-rooms.sh <username>` | Lista salas do usuario |
+| `invite-room.sh <username> <room_id> [relay]` | Convida bot para sala + set-relay |
+| `leave-room.sh <username> <room_id>` | Remove usuario de uma sala |
+| `get-token.sh` | Gera token para usuario existente |
+
+### Configuracao dos Scripts (.env)
+
+```env
+MATRIX_HOMESERVER_URL=https://matrix.marucci.cloud
+MATRIX_SHARED_SECRET=xxx
+MATRIX_ADMIN_TOKEN=syt_xxx
+MATRIX_INVITER_TOKEN=syt_xxx
+DEFAULT_RELAY_NUMBER=551231974530
+```
+
+### Exemplos de Uso
+
+```bash
+# Criar novo bot
+./scripts/create-bot-user.sh meu-bot
+
+# Listar bots existentes
+./scripts/list-bots.sh
+
+# Convidar bot para sala (com relay default)
+./scripts/invite-room.sh bot-answer '!roomId:matrix.marucci.cloud'
+
+# Convidar bot para sala (com relay customizado)
+./scripts/invite-room.sh bot-answer '!roomId:matrix.marucci.cloud' 5512999999999
+
+# Listar salas de um bot
+./scripts/list-rooms.sh bot-answer
+
+# Remover bot de uma sala
+./scripts/leave-room.sh bot-answer '!roomId:matrix.marucci.cloud'
+
+# Gerar token para usuario existente
+./scripts/get-token.sh -h https://matrix.marucci.cloud -u @user:matrix.marucci.cloud -p senha
 ```
 
 ## Troubleshooting
