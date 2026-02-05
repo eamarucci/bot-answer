@@ -242,6 +242,8 @@ async function createChatCompletionOAuth(
  * IMPORTANTE: OAuth do Claude Code requer que o system prompt comece com
  * "You are Claude Code, Anthropic's official CLI for Claude."
  * Caso contrario a API retorna erro 400: "This credential is only authorized for use with Claude Code"
+ * 
+ * O system prompt deve ser enviado como array de text blocks para OAuth funcionar.
  */
 async function createAnthropicOAuthCompletion(
   messages: ChatMessage[],
@@ -257,16 +259,24 @@ async function createAnthropicOAuthCompletion(
   // Converte mensagens para formato Anthropic
   const { system, messages: anthropicMessages } = convertToAnthropicFormat(messages);
 
-  // Adiciona prefixo obrigatorio para OAuth funcionar
-  // A API valida que o system prompt comeca com essa frase especifica
-  const oauthSystem = system 
-    ? `${CLAUDE_CODE_SYSTEM_PREFIX}\n\n${system}`
-    : CLAUDE_CODE_SYSTEM_PREFIX;
+  // Monta system prompt como array de text blocks (formato requerido para OAuth)
+  // O primeiro bloco DEVE ser o prefixo do Claude Code
+  const systemBlocks: Array<{ type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }> = [
+    { type: 'text', text: CLAUDE_CODE_SYSTEM_PREFIX },
+  ];
+  
+  if (system) {
+    systemBlocks.push({ 
+      type: 'text', 
+      text: system,
+      cache_control: { type: 'ephemeral' }, // Cache para economizar tokens
+    });
+  }
 
   const requestBody = {
     model,
     max_tokens: config.llm.maxTokens,
-    system: oauthSystem,
+    system: systemBlocks,
     messages: anthropicMessages,
   };
 
