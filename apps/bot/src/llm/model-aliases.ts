@@ -3,18 +3,20 @@
  * Maps short names to full OpenRouter model IDs.
  */
 
+import { config } from '../config.js';
+
 export interface ModelInfo {
   id: string;
   alias: string;
   description: string;
 }
 
-// Map of alias -> full model ID
+// Map of alias -> full model ID (usando config do .env)
 const MODEL_ALIASES: Record<string, string> = {
-  "auto": "openrouter/free",
-  "deepseek": "deepseek/deepseek-r1-0528:free",
-  "llama": "meta-llama/llama-3.3-70b-instruct:free",
-  "vision": "nvidia/nemotron-nano-12b-v2-vl:free",
+  "auto": config.models.default,
+  "vision": config.models.vision,
+  // Aliases adicionais podem ser configurados aqui
+  // Estes são apenas atalhos para facilitar comandos do usuario
 };
 
 // Reverse map: full model ID -> alias
@@ -28,14 +30,12 @@ const MODEL_TO_ALIAS: Record<string, string> = Object.entries(MODEL_ALIASES).red
 
 // Model descriptions for help text
 const MODEL_DESCRIPTIONS: Record<string, string> = {
-  "auto": "OpenRouter Free (escolhe entre modelos gratuitos)",
-  "deepseek": "DeepSeek R1 (raciocinio avancado)",
-  "llama": "Llama 3.3 70B (Meta)",
-  "vision": "Nemotron Nano 12B VL (NVIDIA) - usado automaticamente para imagens",
+  "auto": "Modelo padrao configurado",
+  "vision": "Modelo de vision para imagens/videos",
 };
 
-// Default vision model for image analysis
-export const VISION_MODEL = "nvidia/nemotron-nano-12b-v2-vl:free";
+// Default vision model for image analysis (from config)
+export const VISION_MODEL = config.models.vision;
 
 /**
  * Resolve an alias or model ID to the full model ID.

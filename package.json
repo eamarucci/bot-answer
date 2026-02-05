@@ -16,5 +16,9 @@
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@openauthjs/openauth": "^0.4.3",
+    "jose": "^6.1.3"
   }
 }

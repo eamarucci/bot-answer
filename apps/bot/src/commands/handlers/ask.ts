@@ -1,8 +1,9 @@
 import { MatrixClient } from "matrix-bot-sdk";
 import { config } from "../../config.js";
 import { logger } from "../../utils/logger.js";
-import { createChatCompletion } from "../../llm/openrouter-client.js";
+import { createChatCompletion } from "../../llm/llm-client.js";
 import { getModelDisplayName, resolveModelAlias } from "../../llm/model-aliases.js";
+import type { ProviderId } from "@botanswer/database";
 import {
   getEffectiveModel,
   getEffectiveSystemPrompt,
@@ -13,6 +14,7 @@ import type { ChatMessage, ContentPart } from "../../llm/types.js";
 import {
   resolvePhoneFromSender,
   checkPermission,
+  getGroupConfigByRoomId,
   getApiKey,
   getApiKeyFallback,
 } from "../../auth/index.js";
@@ -42,9 +44,11 @@ export async function handleAsk(
   }
 
   // Verifica permissao
+  // Se temos phoneNumber, verifica permissao completa (incluindo lista de usuarios permitidos)
+  // Se nao temos phoneNumber (usuario Matrix nativo), busca config do grupo sem verificar usuario
   const permissionResult = phoneNumber
     ? await checkPermission(roomId, phoneNumber)
-    : { allowed: true };
+    : await getGroupConfigByRoomId(roomId);
 
   if (!permissionResult.allowed) {
     return {
@@ -53,10 +57,13 @@ export async function handleAsk(
     };
   }
 
-  // Determina modelo (prioridade: config do grupo > room-settings.json > default)
-  let model = permissionResult.groupConfig?.model
-    ? resolveModelAlias(permissionResult.groupConfig.model) || getEffectiveModel(roomId)
-    : getEffectiveModel(roomId);
+  // Determina modelo
+  // Se o grupo tem modelo configurado (e nao é "auto"), usa ele
+  // Senao, deixa como "auto" para que getApiKey decida baseado na auth disponivel
+  const groupModel = permissionResult.groupConfig?.model;
+  let model = (groupModel && groupModel !== 'auto')
+    ? resolveModelAlias(groupModel) || groupModel
+    : 'auto';
 
   // Determina system prompt (prioridade: config do grupo > room-settings.json > default)
   const systemPrompt = permissionResult.groupConfig?.systemPrompt
@@ -152,9 +159,20 @@ export async function handleAsk(
   }
 
   // Busca chave API correta
+  // Usa getApiKey se tiver groupConfig OU admin (para OAuth)
+  // Senao usa fallback
   const isVision = !!media;
-  const apiKeyResult = permissionResult.groupConfig
-    ? await getApiKey(permissionResult, isVision)
+  
+  logger.debug("Permission result for API key lookup", {
+    hasGroupConfig: !!permissionResult.groupConfig,
+    hasAdmin: !!permissionResult.admin,
+    adminId: permissionResult.admin?.id,
+    hasAnthropicOAuth: !!permissionResult.admin?.anthropicOAuthRefresh,
+    anthropicOAuthModel: permissionResult.admin?.anthropicOAuthModel,
+  });
+  
+  const apiKeyResult = (permissionResult.groupConfig || permissionResult.admin)
+    ? await getApiKey(permissionResult, isVision, model)
     : await getApiKeyFallback(isVision);
 
   if (!apiKeyResult) {
@@ -164,17 +182,39 @@ export async function handleAsk(
     };
   }
 
+  // Se o resultado trouxe um modelo especifico (config do admin/grupo), usa ele
+  // a menos que ja tenha sido setado pelo grupo via room-settings
+  if (apiKeyResult.model && !permissionResult.groupConfig?.model) {
+    model = apiKeyResult.model;
+  }
+
+  const provider: ProviderId = apiKeyResult.provider;
+
   logger.debug("Sending messages to LLM", {
     totalMessages: messages.length,
     hasMedia: !!media,
     mediaType: media?.type,
+    provider,
+    model,
     apiKeySource: apiKeyResult.source,
+    authType: apiKeyResult.type,
   });
 
-  // Send to LLM
-  const result = await createChatCompletion(messages, model, {
-    apiKey: apiKeyResult.key,
-  });
+  // Send to LLM - monta options baseado no tipo de auth
+  const completionOptions = apiKeyResult.type === 'oauth'
+    ? {
+        type: 'oauth' as const,
+        adminId: apiKeyResult.adminId,
+        oauthProvider: apiKeyResult.oauthProvider,
+        provider,
+      }
+    : {
+        type: 'api' as const,
+        apiKey: apiKeyResult.key,
+        provider,
+      };
+
+  const result = await createChatCompletion(messages, model, completionOptions);
 
   if (!result.success) {
     logger.error("LLM request failed", {

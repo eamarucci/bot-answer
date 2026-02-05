@@ -2,7 +2,7 @@
 
 ## Visao Geral
 
-Bot para Matrix que responde perguntas usando LLMs via OpenRouter API. Arquitetura **multi-tenant** onde cada admin (identificado pelo numero de relay do WhatsApp) gerencia suas proprias chaves API e usuarios atraves de uma plataforma web.
+Bot para Matrix que responde perguntas usando LLMs. Suporta **multiplos provedores** (OpenRouter, OpenAI, Anthropic, Groq). Arquitetura **multi-tenant** onde cada admin (identificado pelo numero de relay do WhatsApp) gerencia suas proprias chaves API, provedores, modelos e usuarios atraves de uma plataforma web.
 
 ## Estrutura do Monorepo
 
@@ -25,7 +25,7 @@ bot-answer/
 │   │   │   │   ├── parser.ts
 │   │   │   │   └── index.ts
 │   │   │   ├── db/client.ts # Cliente Prisma
-│   │   │   ├── llm/         # Cliente OpenRouter
+│   │   │   ├── llm/         # Cliente LLM multi-provedor
 │   │   │   ├── matrix/      # Cliente Matrix
 │   │   │   └── storage/     # Persistencia local
 │   │   └── Dockerfile
@@ -50,10 +50,12 @@ bot-answer/
 │   │       ├── encrypt.ts
 │   │       └── decrypt.ts
 │   │
-│   └── database/            # Prisma schema
+│   └── database/            # Prisma schema + providers
 │       ├── prisma/
 │       │   └── schema.prisma
-│       └── src/index.ts
+│       └── src/
+│           ├── index.ts
+│           └── providers.ts   # Config de provedores LLM
 │
 ├── .env                     # Variaveis de ambiente
 ├── .npmrc                   # Config pnpm (build scripts)

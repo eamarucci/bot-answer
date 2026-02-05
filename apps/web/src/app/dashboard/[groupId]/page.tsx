@@ -95,12 +95,19 @@ export default async function GroupPage({ params }: Props) {
         <div style={cardStyle}>
           <GroupConfigForm
             groupId={groupConfig.id}
+            currentProvider={groupConfig.provider}
+            currentModel={groupConfig.model}
             hasApiKey={!!groupConfig.apiKey}
+            currentVisionProvider={groupConfig.visionProvider}
+            currentVisionModel={groupConfig.visionModel}
             hasVisionApiKey={!!groupConfig.visionApiKey}
-            model={groupConfig.model}
             systemPrompt={groupConfig.systemPrompt || ''}
             allowAll={groupConfig.allowAll}
-            hasDefaultKey={!!admin.defaultApiKey}
+            adminProvider={admin.defaultProvider}
+            adminModel={admin.defaultModel}
+            adminVisionProvider={admin.defaultVisionProvider}
+            adminVisionModel={admin.defaultVisionModel}
+            hasAdminKey={!!admin.defaultApiKey}
           />
         </div>
       </section>

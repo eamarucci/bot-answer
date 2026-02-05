@@ -45,19 +45,27 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      {/* Secao de chaves padrao */}
+      {/* Secao de configuracao padrao */}
       <section style={{ marginBottom: '2.5rem' }}>
         <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>
-          Suas Chaves API Padrao
+          Sua Configuracao Padrao
         </h2>
         <p style={{ fontSize: '0.875rem', color: 'var(--muted-foreground)', marginBottom: '1rem' }}>
-          Usadas em grupos que nao tem chave propria configurada.
+          Provedor e modelo usados em grupos que nao tem configuracao propria.
         </p>
 
         <div style={cardStyle}>
           <DefaultKeysForm
+            currentProvider={admin.defaultProvider}
+            currentModel={admin.defaultModel}
             hasApiKey={!!admin.defaultApiKey}
+            currentVisionProvider={admin.defaultVisionProvider}
+            currentVisionModel={admin.defaultVisionModel}
             hasVisionApiKey={!!admin.defaultVisionApiKey}
+            hasAnthropicOAuth={!!admin.anthropicOAuthRefresh}
+            hasOpenaiOAuth={!!admin.openaiOAuthRefresh}
+            anthropicOAuthModel={admin.anthropicOAuthModel}
+            openaiOAuthModel={admin.openaiOAuthModel}
           />
         </div>
       </section>

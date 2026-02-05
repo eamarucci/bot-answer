@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { encrypt } from '@botanswer/crypto';
+import { isValidProvider } from '@botanswer/database';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 
@@ -13,24 +14,59 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { apiKey, visionApiKey } = body;
+    const { 
+      provider, 
+      model, 
+      apiKey, 
+      visionProvider,
+      visionModel,
+      visionApiKey,
+    } = body;
 
     const updateData: Record<string, string | null> = {};
 
+    // Atualiza provedor de texto
+    if (provider !== undefined) {
+      if (provider && !isValidProvider(provider)) {
+        return NextResponse.json({ error: 'Provedor invalido' }, { status: 400 });
+      }
+      updateData.defaultProvider = provider || null;
+    }
+
+    // Atualiza modelo de texto
+    if (model !== undefined) {
+      updateData.defaultModel = model || null;
+    }
+
+    // Atualiza chave API de texto
     if (apiKey) {
       updateData.defaultApiKey = encrypt(apiKey, ENCRYPTION_KEY);
     }
 
-    if (visionApiKey) {
-      updateData.defaultVisionApiKey = encrypt(visionApiKey, ENCRYPTION_KEY);
-    } else if (apiKey && visionApiKey === undefined) {
-      // Se atualizou apiKey mas visionApiKey é undefined, limpa a visionApiKey
-      // (usa mesma chave)
-      updateData.defaultVisionApiKey = null;
+    // Atualiza provedor de vision
+    if (visionProvider !== undefined) {
+      if (visionProvider && !isValidProvider(visionProvider)) {
+        return NextResponse.json({ error: 'Provedor de vision invalido' }, { status: 400 });
+      }
+      updateData.defaultVisionProvider = visionProvider || null;
+    }
+
+    // Atualiza modelo de vision
+    if (visionModel !== undefined) {
+      updateData.defaultVisionModel = visionModel || null;
+    }
+
+    // Atualiza chave de vision
+    if (visionApiKey !== undefined) {
+      if (visionApiKey === null) {
+        updateData.defaultVisionApiKey = null;
+      } else if (visionApiKey) {
+        updateData.defaultVisionApiKey = encrypt(visionApiKey, ENCRYPTION_KEY);
+      }
     }
 
     if (Object.keys(updateData).length === 0) {
-      return NextResponse.json({ error: 'Nenhuma chave fornecida' }, { status: 400 });
+      return NextResponse.json({ error: 'Nenhum dado para atualizar' }, { status: 400 });
     }
 
     await prisma.admin.update({

@@ -11,9 +11,26 @@ model Admin {
   id                    String        @id @default(cuid())
   phoneNumber           String        @unique
   
-  // Chaves default do admin (usadas quando grupo nao tem chave propria)
-  defaultApiKey         String?       // Chave padrao para texto (criptografada)
-  defaultVisionApiKey   String?       // Chave padrao para vision (criptografada)
+  // Configuracao default do admin (usada quando grupo nao tem config propria)
+  defaultProvider       String?       // "openrouter" | "openai" | "anthropic" | "groq"
+  defaultModel          String?       // ID do modelo selecionado
+  defaultApiKey         String?       // Chave do provedor (criptografada)
+  
+  // Configuracao de vision (pode ser diferente do texto)
+  defaultVisionProvider String?       // Provedor para vision (null = mesmo do texto)
+  defaultVisionModel    String?       // Modelo para vision (null = mesmo do texto)
+  defaultVisionApiKey   String?       // Chave para vision (null = mesma do texto)
+  
+  // OAuth Anthropic (para usar Claude Pro/Max)
+  anthropicOAuthRefresh String?       // Refresh token (criptografado)
+  anthropicOAuthExpires DateTime?     // Quando o refresh token expira
+  anthropicOAuthModel   String?       // Modelo selecionado (ex: claude-sonnet-4-20250514)
+  
+  // OAuth OpenAI (para usar ChatGPT Plus/Pro)
+  openaiOAuthRefresh    String?       // Refresh token (criptografado)
+  openaiOAuthExpires    DateTime?     // Quando o refresh token expira
+  openaiOAuthAccountId  String?       // Account ID para header ChatGPT-Account-Id
+  openaiOAuthModel      String?       // Modelo selecionado (ex: gpt-4o)
   
   createdAt             DateTime      @default(now())
   lastLoginAt           DateTime?
@@ -29,11 +46,16 @@ model GroupConfig {
   adminId       String
   admin         Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
   
-  // Chaves especificas do grupo (opcional - se null, usa default do admin)
-  apiKey        String?  // Chave para texto (criptografada)
-  visionApiKey  String?  // Chave para vision (criptografada)
+  // Configuracao especifica do grupo (opcional - se null, usa default do admin)
+  provider      String?  // Override de provedor (null = usa do admin)
+  model         String   @default("auto")  // ID do modelo ou "auto"
+  apiKey        String?  // Chave do provedor (criptografada)
   
-  model         String   @default("auto")
+  // Configuracao de vision (pode ser diferente do texto)
+  visionProvider String?  // Provedor para vision (null = mesmo do texto)
+  visionModel    String?  // Modelo para vision (null = mesmo do texto)
+  visionApiKey   String?  // Chave para vision (null = mesma do texto)
+  
   systemPrompt  String?
   isActive      Boolean  @default(true)
   allowAll      Boolean  @default(true)  // true = todos podem usar

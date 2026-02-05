@@ -87,3 +87,42 @@ export async function resolvePhoneFromSender(
   }
   return resolvePhoneFromGhost(ghostId);
 }
+
+/**
+ * Busca o numero de telefone do relay de um grupo no banco do Mautrix
+ *
+ * @param roomId - Matrix room ID (ex: "!abc123:matrix.server.com")
+ * @returns Numero de telefone do relay ou null
+ */
+export async function getRelayPhoneForRoom(
+  roomId: string
+): Promise<string | null> {
+  try {
+    const result = await mautrixPool.query<{ relay_login_id: string }>(
+      `
+      SELECT relay_login_id 
+      FROM portal 
+      WHERE mxid = $1 AND relay_login_id IS NOT NULL
+      `,
+      [roomId]
+    );
+
+    if (result.rows.length === 0 || !result.rows[0].relay_login_id) {
+      return null;
+    }
+
+    const relayLoginId = result.rows[0].relay_login_id;
+    
+    // relay_login_id já é o número de telefone (ex: "551231974530")
+    // Se for numérico, retorna direto
+    if (/^\d+$/.test(relayLoginId)) {
+      return relayLoginId;
+    }
+    
+    // Senão tenta resolver como ghost
+    return resolvePhoneFromGhost(relayLoginId);
+  } catch (error) {
+    console.error('Erro ao buscar relay do grupo:', error);
+    return null;
+  }
+}

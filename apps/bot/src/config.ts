@@ -20,7 +20,13 @@ const configSchema = z.object({
   // Models
   models: z.object({
     default: z.string().min(1),
-    vision: z.string().min(1).default("nvidia/nemotron-nano-12b-v2-vl:free"),
+    vision: z.string().min(1),
+  }),
+
+  // OAuth Default Models (usados quando admin tem OAuth mas nao selecionou modelo)
+  oauthModels: z.object({
+    anthropic: z.string().min(1),
+    openai: z.string().min(1),
   }),
 
   // LLM Settings
@@ -63,8 +69,12 @@ function loadConfig() {
       baseUrl: process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1",
     },
     models: {
-      default: process.env.DEFAULT_MODEL || "openrouter/free",
-      vision: process.env.VISION_MODEL || "nvidia/nemotron-nano-12b-v2-vl:free",
+      default: process.env.DEFAULT_MODEL,
+      vision: process.env.VISION_MODEL,
+    },
+    oauthModels: {
+      anthropic: process.env.OAUTH_ANTHROPIC_MODEL,
+      openai: process.env.OAUTH_OPENAI_MODEL,
     },
     llm: {
       maxTokens: parseInt(process.env.MAX_TOKENS || "2000", 10),
