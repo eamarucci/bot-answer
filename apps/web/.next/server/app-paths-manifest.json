@@ -1,0 +1,5 @@
+{
+  "/api/auth/check-confirmation/route": "app/api/auth/check-confirmation/route.js",
+  "/api/auth/request-code/route": "app/api/auth/request-code/route.js",
+  "/page": "app/page.js"
+}

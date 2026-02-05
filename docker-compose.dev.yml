@@ -1,0 +1,19 @@
+# Docker Compose para desenvolvimento local
+# Uso: docker compose -f docker-compose.dev.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: botanswer-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evandro
+      POSTGRES_PASSWORD: evandro
+      POSTGRES_DB: botanswer
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-dev-data:

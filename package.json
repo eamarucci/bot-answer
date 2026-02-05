@@ -1,27 +1,20 @@
 {
-  "name": "bot-answer",
+  "name": "botanswer",
   "version": "1.0.0",
-  "description": "Matrix bot for AI-powered answers using OpenRouter API",
-  "type": "module",
-  "main": "dist/index.js",
+  "private": true,
+  "description": "BotAnswer - Matrix bot with multi-tenant API keys",
   "scripts": {
-    "dev": "tsx watch --env-file=.env src/index.ts",
-    "build": "tsc",
-    "start": "node --env-file=.env dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "deploy": "docker build -t eamarucci/bot-answer:latest . && docker push eamarucci/bot-answer:latest"
+    "dev:bot": "pnpm --filter @botanswer/bot dev",
+    "dev:web": "pnpm --filter @botanswer/web dev",
+    "build": "pnpm -r build",
+    "build:bot": "pnpm --filter @botanswer/bot build",
+    "build:web": "pnpm --filter @botanswer/web build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @botanswer/database generate",
+    "db:push": "pnpm --filter @botanswer/database push",
+    "db:migrate": "pnpm --filter @botanswer/database migrate"
   },
   "engines": {
     "node": ">=20.0.0"
-  },
-  "dependencies": {
-    "dotenv": "^17.2.3",
-    "matrix-bot-sdk": "^0.7.1",
-    "zod": "^3.24.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20.0.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2"
   }
 }

@@ -1,0 +1,63 @@
+services:
+  bot-answer:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    container_name: bot-answer
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://evandro:evandro@db-postgres:5432/botanswer
+      - MAUTRIX_DATABASE_URL=postgresql://evandro:evandro@db-postgres:5432/mautrix_whatsapp
+    volumes:
+      - bot-answer-data:/app/apps/bot/data
+    networks:
+      - infra-network
+    depends_on:
+      - db-postgres
+
+  bot-answer-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: bot-answer-web
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://evandro:evandro@db-postgres:5432/botanswer
+      - MAUTRIX_DATABASE_URL=postgresql://evandro:evandro@db-postgres:5432/mautrix_whatsapp
+      - BOT_API_URL=http://bot-answer:3001
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.botanswer-web.rule=Host(`bot-answer.marucci.cloud`)"
+      - "traefik.http.routers.botanswer-web.entrypoints=websecure"
+      - "traefik.http.routers.botanswer-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.botanswer-web.loadbalancer.server.port=3000"
+    networks:
+      - infra-network
+    depends_on:
+      - db-postgres
+      - bot-answer
+
+  db-postgres:
+    image: postgres:16-alpine
+    container_name: db-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: evandro
+      POSTGRES_PASSWORD: evandro
+      POSTGRES_DB: botanswer
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - infra-network
+
+volumes:
+  bot-answer-data:
+  postgres-data:
+
+networks:
+  infra-network:
+    external: true

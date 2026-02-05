@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id                    String        @id @default(cuid())
+  phoneNumber           String        @unique
+  
+  // Chaves default do admin (usadas quando grupo nao tem chave propria)
+  defaultApiKey         String?       // Chave padrao para texto (criptografada)
+  defaultVisionApiKey   String?       // Chave padrao para vision (criptografada)
+  
+  createdAt             DateTime      @default(now())
+  lastLoginAt           DateTime?
+  
+  groupConfigs          GroupConfig[]
+  authCodes             AuthCode[]
+}
+
+model GroupConfig {
+  id            String   @id @default(cuid())
+  matrixRoomId  String   @unique  // Ex: "!HSsbVMRWTcZpKxcEwg:matrix.marucci.cloud"
+  
+  adminId       String
+  admin         Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  
+  // Chaves especificas do grupo (opcional - se null, usa default do admin)
+  apiKey        String?  // Chave para texto (criptografada)
+  visionApiKey  String?  // Chave para vision (criptografada)
+  
+  model         String   @default("auto")
+  systemPrompt  String?
+  isActive      Boolean  @default(true)
+  allowAll      Boolean  @default(true)  // true = todos podem usar
+  
+  users         User[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model User {
+  id              String      @id @default(cuid())
+  phoneNumber     String      // Ex: "5512999999999"
+  displayName     String?     // Cache do nome
+  
+  groupConfigId   String
+  groupConfig     GroupConfig @relation(fields: [groupConfigId], references: [id], onDelete: Cascade)
+  
+  isEnabled       Boolean     @default(true)
+  
+  // Chave especifica do usuario neste grupo (opcional)
+  apiKeyOverride  String?     // Criptografada
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@unique([phoneNumber, groupConfigId])
+}
+
+model AuthCode {
+  id            String    @id @default(cuid())
+  code          String    // 6 digitos
+  phoneNumber   String
+  
+  adminId       String?
+  admin         Admin?    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  
+  expiresAt     DateTime
+  confirmedAt   DateTime? // Confirmado via comando no bot
+  usedAt        DateTime? // Usado para fazer login
+  createdAt     DateTime  @default(now())
+  
+  @@index([phoneNumber, code])
+}
+
+model GlobalConfig {
+  id                   String   @id @default("global")
+  fallbackApiKey       String   // Ultima instancia para texto
+  fallbackVisionApiKey String?  // Ultima instancia para vision (null = usa fallbackApiKey)
+  updatedAt            DateTime @updatedAt
+}
