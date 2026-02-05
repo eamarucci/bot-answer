@@ -13,10 +13,14 @@ interface MatrixEvent {
   content: {
     msgtype?: string;
     body?: string;
+    formatted_body?: string;
     "m.relates_to"?: {
       "m.in_reply_to"?: {
         event_id: string;
       };
+    };
+    "m.mentions"?: {
+      user_ids?: string[];
     };
   };
   type: string;
@@ -25,6 +29,41 @@ interface MatrixEvent {
 // Track processed events to prevent duplicates
 const processedEvents = new Set<string>();
 const MAX_PROCESSED_EVENTS = 1000;
+
+/**
+ * Extrai a mensagem apos a mencao.
+ * Remove o link de mencao do formatted_body ou o nome do contato do body.
+ */
+function extractMessageAfterMention(formattedBody?: string, body?: string): string {
+  // Tenta extrair do formatted_body primeiro (mais confiavel)
+  if (formattedBody) {
+    // Remove tags <a>...</a> de mencao e pega o resto
+    // Formato: <a href="https://matrix.to/#/@user:server">Nome</a> mensagem
+    const withoutMention = formattedBody
+      .replace(/<a\s+href="https:\/\/matrix\.to\/#\/@[^"]+">.*?<\/a>\s*/gi, '')
+      .trim();
+    
+    if (withoutMention) {
+      return withoutMention;
+    }
+  }
+  
+  // Fallback: remove o primeiro "token" do body (que seria o nome do contato)
+  if (body) {
+    // Se o body comeca com um nome seguido de espaco, remove
+    // Ex: "Bot (WA) mensagem" -> "mensagem"
+    // Tenta detectar padroes comuns de nome de contato
+    const match = body.match(/^[^@\s][^\n]*?\)\s+(.+)$/s) || // Nome (algo) mensagem
+                  body.match(/^@\S+\s+(.+)$/s) ||             // @nome mensagem
+                  body.match(/^\S+\s+(.+)$/s);                // Nome mensagem
+    
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  
+  return body?.trim() || '';
+}
 
 export async function handleMessage(
   roomId: string,
@@ -39,7 +78,9 @@ export async function handleMessage(
     sender: typedEvent.sender,
     type: typedEvent.type,
     msgtype: typedEvent.content?.msgtype,
-    body: typedEvent.content?.body?.substring(0, 50),
+    body: typedEvent.content?.body?.substring(0, 100),
+    formatted_body: (typedEvent.content as Record<string, unknown>)?.formatted_body?.toString().substring(0, 200),
+    mentions: JSON.stringify((typedEvent.content as Record<string, unknown>)?.["m.mentions"]),
   });
 
   // Ignore own messages
@@ -83,15 +124,51 @@ export async function handleMessage(
   // Strip reply quote to get the actual command
   body = stripReplyQuote(body);
 
-  // Busca o numero do relay da sala para verificar mencao (se habilitado)
-  let relayNumber: string | null = null;
+  // Verifica se é mencao ao bot via m.mentions
+  let isBotMention = false;
+  let mentionMessage: string | null = null;
+  
   if (config.bot.mentionTriggerEnabled) {
+    const mentionedUsers = content["m.mentions"]?.user_ids || [];
+    
+    // Verifica se o bot foi mencionado
+    // Pode ser pelo Matrix user ID do bot OU pelo relay da sala
+    const relayNumber = await getRelayPhoneForRoom(roomId);
+    const relayMatrixId = relayNumber ? `@whatsapp_${relayNumber}:${config.matrix.userId.split(':')[1]}` : null;
+    
+    isBotMention = mentionedUsers.some(userId => {
+      // Mencao direta ao bot Matrix
+      if (userId === config.matrix.userId) return true;
+      // Mencao ao relay do WhatsApp
+      if (relayMatrixId && userId === relayMatrixId) return true;
+      // Mencao a qualquer usuario @bot* ou @whatsapp* que seja o relay
+      if (relayNumber && userId.includes(relayNumber)) return true;
+      return false;
+    });
+    
+    if (isBotMention) {
+      // Extrai a mensagem removendo a mencao do formatted_body ou body
+      mentionMessage = extractMessageAfterMention(content.formatted_body, content.body);
+      logger.debug("Bot mention detected", { mentionedUsers, mentionMessage });
+    }
+  }
+
+  // Busca o numero do relay para verificar mencao por @numero (fallback)
+  let relayNumber: string | null = null;
+  if (config.bot.mentionTriggerEnabled && !isBotMention) {
     relayNumber = await getRelayPhoneForRoom(roomId);
   }
 
-  // Check for command trigger (prefix ou mencao ao relay)
-  if (!isCommand(body, relayNumber || undefined)) {
+  // Check for command trigger (prefix, mencao ao bot, ou mencao ao relay por numero)
+  const isCommandTrigger = isCommand(body, relayNumber || undefined);
+  
+  if (!isBotMention && !isCommandTrigger) {
     return;
+  }
+  
+  // Se foi mencao ao bot, usa a mensagem extraida
+  if (isBotMention && mentionMessage !== null) {
+    body = mentionMessage;
   }
 
   // Mark event as processed to prevent duplicates
@@ -109,6 +186,7 @@ export async function handleMessage(
     sender: typedEvent.sender,
     eventId: typedEvent.event_id,
     command: body.substring(0, 50),
+    isBotMention,
   });
 
   try {
@@ -118,8 +196,10 @@ export async function handleMessage(
     // Get reply-to event ID if this is a reply
     const replyToEventId = content["m.relates_to"]?.["m.in_reply_to"]?.event_id;
 
-    // Process the command (passing sender and relayNumber for permission check and parsing)
-    const result = await processCommand(client, roomId, body, replyToEventId, typedEvent.sender, relayNumber || undefined);
+    // Process the command
+    // Se foi mencao direta ao bot, adiciona o prefixo para que parseCommand funcione
+    const commandBody = isBotMention ? `${config.bot.commandPrefix} ${body}` : body;
+    const result = await processCommand(client, roomId, commandBody, replyToEventId, typedEvent.sender, relayNumber || undefined);
 
     // Stop typing indicator
     await client.setTyping(roomId, false);
