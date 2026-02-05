@@ -4,6 +4,7 @@ import { logger } from "../utils/logger.js";
 import { getStartTimestamp, getMatrixClient } from "./client.js";
 import { isCommand, stripReplyQuote } from "../commands/parser.js";
 import { processCommand } from "../commands/index.js";
+import { getRelayPhoneForRoom } from "../auth/resolve-phone.js";
 
 interface MatrixEvent {
   event_id: string;
@@ -82,8 +83,14 @@ export async function handleMessage(
   // Strip reply quote to get the actual command
   body = stripReplyQuote(body);
 
-  // Check for command trigger
-  if (!isCommand(body)) {
+  // Busca o numero do relay da sala para verificar mencao (se habilitado)
+  let relayNumber: string | null = null;
+  if (config.bot.mentionTriggerEnabled) {
+    relayNumber = await getRelayPhoneForRoom(roomId);
+  }
+
+  // Check for command trigger (prefix ou mencao ao relay)
+  if (!isCommand(body, relayNumber || undefined)) {
     return;
   }
 
@@ -111,8 +118,8 @@ export async function handleMessage(
     // Get reply-to event ID if this is a reply
     const replyToEventId = content["m.relates_to"]?.["m.in_reply_to"]?.event_id;
 
-    // Process the command (passing sender for permission check)
-    const result = await processCommand(client, roomId, body, replyToEventId, typedEvent.sender);
+    // Process the command (passing sender and relayNumber for permission check and parsing)
+    const result = await processCommand(client, roomId, body, replyToEventId, typedEvent.sender, relayNumber || undefined);
 
     // Stop typing indicator
     await client.setTyping(roomId, false);

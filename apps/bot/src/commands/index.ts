@@ -23,9 +23,10 @@ export async function processCommand(
   roomId: string,
   body: string,
   replyToEventId?: string,
-  sender?: string
+  sender?: string,
+  relayNumber?: string
 ): Promise<CommandResult> {
-  const parsed = parseCommand(body);
+  const parsed = parseCommand(body, relayNumber);
 
   if (!parsed) {
     return {

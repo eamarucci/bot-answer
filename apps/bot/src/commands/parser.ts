@@ -18,21 +18,20 @@ export interface ParsedCommand {
 }
 
 /**
- * Gera padroes de mencao do WhatsApp para o numero do bot.
+ * Gera padroes de mencao do WhatsApp para o numero do relay.
  * Retorna array de possiveis formatos de mencao.
  * Ex: ["@5511999999999", "@+5511999999999"]
  * 
- * So retorna padroes se MENTION_TRIGGER_ENABLED=true e BOT_WHATSAPP_NUMBER estiver configurado.
+ * So retorna padroes se MENTION_TRIGGER_ENABLED=true e relayNumber for fornecido.
  */
-function getMentionPatterns(): string[] {
+function getMentionPatterns(relayNumber?: string): string[] {
   // Verifica se mencao como trigger esta habilitada
   if (!config.bot.mentionTriggerEnabled) return [];
   
-  const number = config.bot.whatsappNumber;
-  if (!number) return [];
+  if (!relayNumber) return [];
   
   // Remove caracteres nao numericos para normalizar
-  const cleanNumber = number.replace(/\D/g, '');
+  const cleanNumber = relayNumber.replace(/\D/g, '');
   
   // Padroes comuns de mencao no WhatsApp
   return [
@@ -42,11 +41,11 @@ function getMentionPatterns(): string[] {
 }
 
 /**
- * Verifica se o body contem uma mencao ao bot e extrai a mensagem.
+ * Verifica se o body contem uma mencao ao relay e extrai a mensagem.
  * Retorna o texto apos a mencao, ou null se nao for mencao.
  */
-function extractMentionMessage(body: string): string | null {
-  const patterns = getMentionPatterns();
+function extractMentionMessage(body: string, relayNumber?: string): string | null {
+  const patterns = getMentionPatterns(relayNumber);
   if (patterns.length === 0) return null;
   
   const trimmedBody = body.trim();
@@ -72,16 +71,19 @@ function extractMentionMessage(body: string): string | null {
  * - /ia -config             -> show-config
  * - /ia -reset              -> reset
  * - /ia -ajuda              -> help
- * - @5511999999999 <msg>    -> ask (mencao ao numero do bot)
+ * - @5511999999999 <msg>    -> ask (mencao ao relay da sala)
+ * 
+ * @param body - Corpo da mensagem
+ * @param relayNumber - Numero do relay da sala (para trigger por mencao)
  */
-export function parseCommand(body: string): ParsedCommand | null {
+export function parseCommand(body: string, relayNumber?: string): ParsedCommand | null {
   const prefix = config.bot.commandPrefix;
   const trimmedBody = body.trim();
   
-  // Primeiro verifica mencao ao numero do WhatsApp
-  const mentionMessage = extractMentionMessage(trimmedBody);
+  // Primeiro verifica mencao ao relay da sala
+  const mentionMessage = extractMentionMessage(trimmedBody, relayNumber);
   if (mentionMessage !== null) {
-    // Mencao ao bot - trata como comando ask
+    // Mencao ao relay - trata como comando ask
     if (!mentionMessage) {
       return {
         type: "help",
@@ -181,9 +183,12 @@ function parseFlagCommand(afterPrefix: string, raw: string): ParsedCommand {
 }
 
 /**
- * Check if a message body starts with the command prefix or is a mention to the bot.
+ * Check if a message body starts with the command prefix or is a mention to the relay.
+ * 
+ * @param body - Corpo da mensagem
+ * @param relayNumber - Numero do relay da sala (para trigger por mencao)
  */
-export function isCommand(body: string): boolean {
+export function isCommand(body: string, relayNumber?: string): boolean {
   const prefix = config.bot.commandPrefix;
   const trimmedBody = body.trim();
   
@@ -192,8 +197,8 @@ export function isCommand(body: string): boolean {
     return true;
   }
   
-  // Check mention patterns (if enabled)
-  const mentionPatterns = getMentionPatterns();
+  // Check mention patterns (if enabled and relayNumber provided)
+  const mentionPatterns = getMentionPatterns(relayNumber);
   for (const pattern of mentionPatterns) {
     if (trimmedBody.startsWith(pattern)) {
       return true;
