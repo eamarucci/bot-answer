@@ -2,58 +2,105 @@
 
 ## Visao Geral
 
-Bot para Matrix que responde perguntas usando LLMs via OpenRouter API. Configuracao de modelo e system prompt e persistida por sala. Suporta analise de imagens e videos.
+Bot para Matrix que responde perguntas usando LLMs via OpenRouter API. Arquitetura **multi-tenant** onde cada admin (identificado pelo numero de relay do WhatsApp) gerencia suas proprias chaves API e usuarios atraves de uma plataforma web.
+
+## Estrutura do Monorepo
+
+```
+bot-answer/
+├── apps/
+│   ├── bot/                 # Bot Matrix (TypeScript)
+│   │   ├── src/
+│   │   │   ├── index.ts     # Entry point
+│   │   │   ├── config.ts    # Configuracao com Zod
+│   │   │   ├── auth/        # Autenticacao multi-tenant
+│   │   │   │   ├── resolve-phone.ts   # Resolve telefone do sender
+│   │   │   │   ├── check-permission.ts
+│   │   │   │   └── get-api-key.ts
+│   │   │   ├── commands/    # Handlers de comandos
+│   │   │   │   ├── handlers/
+│   │   │   │   │   ├── ask.ts
+│   │   │   │   │   ├── confirm.ts     # /ia -confirmar (auth)
+│   │   │   │   │   └── ...
+│   │   │   │   ├── parser.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── db/client.ts # Cliente Prisma
+│   │   │   ├── llm/         # Cliente OpenRouter
+│   │   │   ├── matrix/      # Cliente Matrix
+│   │   │   └── storage/     # Persistencia local
+│   │   └── Dockerfile
+│   │
+│   └── web/                 # Plataforma admin (Next.js 15)
+│       ├── src/
+│       │   ├── app/
+│       │   │   ├── page.tsx           # Login
+│       │   │   ├── dashboard/         # Dashboard admin
+│       │   │   └── api/               # API routes
+│       │   ├── components/
+│       │   │   └── login-form.tsx
+│       │   └── lib/
+│       │       ├── auth.ts            # JWT
+│       │       ├── db.ts              # Prisma client
+│       │       └── mautrix-db.ts      # Consulta ao bridge
+│       └── Dockerfile
+│
+├── packages/
+│   ├── crypto/              # AES-256-GCM encrypt/decrypt
+│   │   └── src/
+│   │       ├── encrypt.ts
+│   │       └── decrypt.ts
+│   │
+│   └── database/            # Prisma schema
+│       ├── prisma/
+│       │   └── schema.prisma
+│       └── src/index.ts
+│
+├── .env                     # Variaveis de ambiente
+├── .npmrc                   # Config pnpm (build scripts)
+├── pnpm-workspace.yaml      # Workspace config
+└── docker-compose.yml
+```
 
 ## Comandos de Desenvolvimento
 
 ```bash
-# Instalar dependencias
-npm install
+# Instalar dependencias (na raiz do projeto)
+pnpm install
 
-# Desenvolvimento com hot-reload
-npm run dev
+# Baixar modulo nativo do Matrix (necessario na primeira vez)
+cd node_modules/.pnpm/@matrix-org+matrix-sdk-crypto-nodejs@0.1.0-beta.6/node_modules/@matrix-org/matrix-sdk-crypto-nodejs
+node download-lib.js
+cd -
+
+# Desenvolvimento - Bot (Terminal 1)
+pnpm dev:bot
+
+# Desenvolvimento - Web (Terminal 2)
+pnpm dev:web
+
+# Build de todos os pacotes
+pnpm build
 
 # Verificar tipos TypeScript
-npm run typecheck
+pnpm typecheck
 
-# Build para producao
-npm run build
+# Database - Gerar Prisma client
+pnpm db:generate
 
-# Executar em producao
-npm start
+# Database - Push schema para banco
+pnpm db:push
 ```
 
-## Arquitetura
+## Deploy Docker
 
-```
-src/
-├── index.ts                 # Entry point, inicializacao
-├── config.ts                # Configuracao com Zod validation
-├── matrix/
-│   ├── client.ts            # Cliente Matrix (conexao, lifecycle)
-│   ├── handlers.ts          # Handler de mensagens recebidas
-│   ├── context.ts           # Busca contexto (reply chain + recentes)
-│   └── image.ts             # Download de imagens/videos do Matrix
-├── commands/
-│   ├── index.ts             # Router de comandos
-│   ├── parser.ts            # Parser de comandos e flags
-│   └── handlers/            # Handlers individuais por comando
-│       ├── ask.ts           # Processa pergunta para LLM
-│       ├── set-model.ts     # Define modelo da sala
-│       ├── set-prompt.ts    # Define system prompt
-│       ├── list-models.ts   # Lista modelos disponiveis
-│       ├── show-config.ts   # Mostra config da sala
-│       ├── reset.ts         # Reseta config
-│       └── help.ts          # Mostra ajuda
-├── llm/
-│   ├── openrouter-client.ts # Cliente OpenRouter API
-│   ├── model-aliases.ts     # Mapeamento de aliases para modelos
-│   └── types.ts             # Types para LLM
-├── storage/
-│   └── room-settings.ts     # Persistencia de config por sala (JSON)
-└── utils/
-    ├── logger.ts            # Logger com niveis
-    └── errors.ts            # Erros formatados para usuario
+```bash
+# Build e push da imagem do bot
+docker build -f apps/bot/Dockerfile -t eamarucci/bot-answer:latest .
+docker push eamarucci/bot-answer:latest
+
+# No servidor - atualizar container
+docker pull eamarucci/bot-answer:latest
+docker compose up -d --force-recreate bot-answer
 ```
 
 ## Comandos do Bot
@@ -66,66 +113,43 @@ src/
 | `/ia -modelos` | Lista modelos disponiveis |
 | `/ia -config` | Mostra configuracao da sala |
 | `/ia -reset` | Reseta configuracao para padroes |
+| `/ia -confirmar <codigo>` | Confirma codigo de autenticacao da web |
 | `/ia -ajuda` | Mostra ajuda |
 
-## Sistema de Aliases de Modelos
+## Fluxo de Autenticacao Web
 
-Os modelos sao chamados por aliases curtos em vez de IDs completos:
+1. Admin acessa a web e digita numero do WhatsApp (relay)
+2. Web gera codigo de 6 digitos e mostra na tela
+3. Admin envia `/ia -confirmar CODIGO` em grupo onde é relay
+4. Bot verifica que sender é relay do grupo e confirma codigo no banco
+5. Web detecta confirmacao via polling e faz login
 
-| Alias | Modelo OpenRouter | Descricao |
-|-------|-------------------|-----------|
-| `auto` | `openrouter/free` | Escolhe entre modelos gratuitos |
-| `deepseek` | `deepseek/deepseek-r1-0528:free` | Raciocinio avancado |
-| `llama` | `meta-llama/llama-3.3-70b-instruct:free` | Meta Llama 3.3 70B |
-| `vision` | `nvidia/nemotron-nano-12b-v2-vl:free` | Analise de imagens/videos |
+## Banco de Dados
 
-Para adicionar/modificar modelos, edite `src/llm/model-aliases.ts`.
+### PostgreSQL (botanswer)
 
-## Analise de Imagens e Videos
-
-O bot detecta automaticamente quando o comando `/ia` e um reply para uma imagem ou video:
-
-- **Imagens**: Baixa, converte para base64 e envia para o modelo de vision
-- **Videos**: Baixa, converte para base64 e envia (limite: 20MB)
-- O modelo de vision e usado automaticamente quando midia e detectada
-
-## System Prompts
-
-O sistema usa dois prompts:
-
-1. **BASE_SYSTEM_PROMPT** (fixo): Regras de formatacao (max 4 frases, sem listas)
-2. **DEFAULT_SYSTEM_PROMPT** (editavel via `/ia -prompt`): Contexto adicional
-
-## Fluxo de Contexto
-
-O bot monta contexto de conversa para enviar ao LLM:
-
-1. **Com reply**: Segue a cadeia de replies para construir contexto
-2. **Sem reply**: Busca ultimas N mensagens da sala
-3. **Com midia**: Nao inclui contexto anterior, foca na imagem/video
-
-### Limites de Contexto
-
-- `CONTEXT_MAX_MESSAGES`: Maximo de mensagens no contexto (default: 10)
-- `CONTEXT_MAX_AGE_MINUTES`: Idade maxima das mensagens (default: 30 min)
-
-## Persistencia
-
-### Arquivos de Dados
-
-- **Estado do sync**: `data/bot-state.json` - posicao do sync do Matrix
-- **Config por sala**: `data/room-settings.json` - modelo e prompt de cada sala
-
-### Estrutura de Room Settings
-
-```json
-{
-  "!roomId:server": {
-    "model": "deepseek",
-    "systemPrompt": "Voce e um especialista em Python..."
-  }
-}
 ```
+DATABASE_URL=postgresql://user:pass@host:5432/botanswer
+```
+
+### Modelos Prisma
+
+- **Admin**: Admins identificados por phoneNumber (relay)
+- **GroupConfig**: Configuracao de grupos (chaves API, modelo, etc)
+- **User**: Usuarios habilitados por grupo
+- **AuthCode**: Codigos de verificacao para login
+- **GlobalConfig**: Chave API fallback global
+
+### Mautrix Database (somente leitura)
+
+```
+MAUTRIX_DATABASE_URL=postgresql://user:pass@host:5432/mautrix_whatsapp
+```
+
+Usado para:
+- Verificar se numero é relay de algum grupo
+- Listar grupos onde admin é relay
+- Resolver telefone de ghosts do WhatsApp
 
 ## Variaveis de Ambiente
 
@@ -135,173 +159,67 @@ MATRIX_HOMESERVER_URL=https://matrix.marucci.cloud
 MATRIX_ACCESS_TOKEN=syt_xxx
 MATRIX_USER_ID=@bot-answer:matrix.marucci.cloud
 
+# Database
+DATABASE_URL=postgresql://user:pass@host:5432/botanswer
+MAUTRIX_DATABASE_URL=postgresql://user:pass@host:5432/mautrix_whatsapp
+
+# Crypto
+ENCRYPTION_KEY=<64 chars hex>
+
+# Web Auth
+JWT_SECRET=<base64 string>
+
 # OpenRouter
 OPENROUTER_API_KEY=sk-or-xxx
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
 # Models
-DEFAULT_MODEL=openrouter/free
+DEFAULT_MODEL=auto
 VISION_MODEL=nvidia/nemotron-nano-12b-v2-vl:free
-
-# System Prompts
-BASE_SYSTEM_PROMPT=LIMITE ABSOLUTO: 4 frases...
-DEFAULT_SYSTEM_PROMPT=Voce e um assistente de chat prestativo.
 
 # LLM Settings
 MAX_TOKENS=2000
 TIMEOUT_MS=60000
-INCLUDE_REASONING=false
-
-# Context
-CONTEXT_MAX_MESSAGES=10
-CONTEXT_MAX_AGE_MINUTES=30
 
 # Bot
-BOT_STATE_FILE=data/bot-state.json
-ROOM_SETTINGS_FILE=data/room-settings.json
 COMMAND_PREFIX=/ia
 LOG_LEVEL=info
 ```
 
-## OpenRouter API
+## Sistema de Aliases de Modelos
 
-### Endpoint
-```
-POST https://openrouter.ai/api/v1/chat/completions
-```
+| Alias | Modelo OpenRouter | Descricao |
+|-------|-------------------|-----------|
+| `auto` | `openrouter/free` | Escolhe entre modelos gratuitos |
+| `deepseek` | `deepseek/deepseek-r1-0528:free` | Raciocinio avancado |
+| `llama` | `meta-llama/llama-3.3-70b-instruct:free` | Meta Llama 3.3 70B |
+| `vision` | `nvidia/nemotron-nano-12b-v2-vl:free` | Analise de imagens/videos |
 
-### Headers
-```
-Authorization: Bearer sk-or-xxx
-Content-Type: application/json
-HTTP-Referer: https://github.com/eamarucci/bot-answer
-X-Title: BotAnswer
-```
+Editar em: `apps/bot/src/llm/model-aliases.ts`
 
-### Request Body (texto)
-```json
-{
-  "model": "openrouter/free",
-  "messages": [
-    {"role": "system", "content": "..."},
-    {"role": "user", "content": "..."}
-  ],
-  "max_tokens": 2000
-}
-```
+## Hierarquia de Chaves API
 
-### Request Body (imagem)
-```json
-{
-  "model": "nvidia/nemotron-nano-12b-v2-vl:free",
-  "messages": [
-    {"role": "system", "content": "..."},
-    {"role": "user", "content": [
-      {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,..."}},
-      {"type": "text", "text": "Descreva esta imagem."}
-    ]}
-  ]
-}
-```
-
-## Deploy
-
-### Build e Push Docker
-
-```bash
-cd /home/evandro/projects/bot/answer
-docker build -t eamarucci/bot-answer:latest .
-docker push eamarucci/bot-answer:latest
-```
-
-### Docker Compose
-
-```yaml
-services:
-  bot-answer:
-    image: eamarucci/bot-answer:latest
-    container_name: bot-answer
-    restart: unless-stopped
-    env_file:
-      - .env
-    volumes:
-      - bot-answer-data:/app/data
-    networks:
-      - infra-network
-
-volumes:
-  bot-answer-data:
-
-networks:
-  infra-network:
-    external: true
-```
-
-## Scripts de Administracao
-
-Scripts compartilhados em `~/projects/bot/scripts/`:
-
-| Script | Descricao |
-|--------|-----------|
-| `create-bot-user.sh <username>` | Cria bot (user_type=bot) e gera access token |
-| `delete-user.sh <username>` | Deleta usuario |
-| `list-bots.sh` | Lista todos os bots |
-| `list-rooms.sh <username>` | Lista salas do usuario |
-| `invite-room.sh <username> <room_id> [relay]` | Convida bot para sala + set-relay |
-| `leave-room.sh <username> <room_id>` | Remove usuario de uma sala |
-| `get-token.sh` | Gera token para usuario existente |
-
-### Configuracao dos Scripts (.env)
-
-```env
-MATRIX_HOMESERVER_URL=https://matrix.marucci.cloud
-MATRIX_SHARED_SECRET=xxx
-MATRIX_ADMIN_TOKEN=syt_xxx
-MATRIX_INVITER_TOKEN=syt_xxx
-DEFAULT_RELAY_NUMBER=551231974530
-```
-
-### Exemplos de Uso
-
-```bash
-# Criar novo bot
-./scripts/create-bot-user.sh meu-bot
-
-# Listar bots existentes
-./scripts/list-bots.sh
-
-# Convidar bot para sala (com relay default)
-./scripts/invite-room.sh bot-answer '!roomId:matrix.marucci.cloud'
-
-# Convidar bot para sala (com relay customizado)
-./scripts/invite-room.sh bot-answer '!roomId:matrix.marucci.cloud' 5512999999999
-
-# Listar salas de um bot
-./scripts/list-rooms.sh bot-answer
-
-# Remover bot de uma sala
-./scripts/leave-room.sh bot-answer '!roomId:matrix.marucci.cloud'
-
-# Gerar token para usuario existente
-./scripts/get-token.sh -h https://matrix.marucci.cloud -u @user:matrix.marucci.cloud -p senha
-```
+1. **Usuario** (se tiver chave propria no grupo)
+2. **Grupo** (se tiver chave propria)
+3. **Admin** (chave default do admin)
+4. **Global** (fallback configurado no GlobalConfig)
 
 ## Troubleshooting
 
-- **Bot nao responde**: Verificar se o token Matrix esta valido
-- **Erro de modelo**: Verificar se o alias existe em `model-aliases.ts`
-- **Contexto vazio**: Verificar `CONTEXT_MAX_AGE_MINUTES`
-- **Timeout**: Aumentar `TIMEOUT_MS` ou usar modelo mais rapido
-- **Resposta cortada**: Aumentar `MAX_TOKENS`
-- **Imagem nao analisa**: Verificar se VISION_MODEL esta configurado
+- **Bot nao inicia (MODULE_NOT_FOUND crypto)**: Rodar `node download-lib.js` no diretorio do modulo
+- **Bot nao responde**: Verificar token Matrix e logs
+- **Erro Prisma**: Rodar `pnpm db:generate` e `pnpm db:push`
+- **Web erro 500**: Verificar DATABASE_URL e MAUTRIX_DATABASE_URL
+- **Login nao funciona**: Verificar se numero é relay de algum grupo no mautrix
 
 ## Padroes de Codigo
 
 - TypeScript ES Modules (extensao .js nos imports)
-- Zod para validacao de configuracao
+- pnpm workspaces para monorepo
+- Prisma para ORM
+- Zod para validacao
+- Next.js 15 App Router para web
 - matrix-bot-sdk para conexao Matrix
-- Fetch nativo para requisicoes HTTP
-- Tratamento de erros com mensagens amigaveis para usuario
 
 ## Repositorios
 

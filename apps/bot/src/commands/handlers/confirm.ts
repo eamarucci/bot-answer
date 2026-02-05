@@ -42,6 +42,8 @@ export async function handleConfirm(
   code: string,
   sender: string
 ): Promise<ConfirmResult> {
+  logger.info('Confirm command received', { roomId, code, sender });
+
   if (!code || code.length !== 6 || !/^\d+$/.test(code)) {
     return {
       success: false,
@@ -52,18 +54,11 @@ export async function handleConfirm(
   // Resolve o numero de telefone do sender
   const senderPhone = await resolvePhoneFromSender(sender);
   
-  if (!senderPhone) {
-    return {
-      success: false,
-      message: 'Nao foi possivel identificar seu numero de telefone.',
-    };
-  }
-
-  logger.debug('Confirm command', { roomId, code, sender, senderPhone });
-
   // Busca info do portal/grupo no mautrix
   const portal = await getPortalByMxid(roomId);
   
+  logger.info('Portal info', { roomId, portal });
+
   if (!portal) {
     return {
       success: false,
@@ -72,23 +67,42 @@ export async function handleConfirm(
   }
 
   // Verifica se o sender é o relay deste grupo
-  if (portal.relay_login_id !== senderPhone) {
+  // O senderPhone pode ser null se a mensagem vier via relay (o proprio relay enviando)
+  // Nesse caso, confiamos que quem está no grupo com relay configurado é o dono
+  const relayPhone = portal.relay_login_id;
+  
+  logger.info('Checking relay', { senderPhone, relayPhone });
+
+  // Se conseguimos resolver o telefone do sender, verifica se bate com o relay
+  if (senderPhone && relayPhone && senderPhone !== relayPhone) {
     return {
       success: false,
       message: 'Apenas o relay do grupo pode confirmar codigos de autenticacao.',
     };
   }
 
+  // Usa o telefone do relay do grupo para buscar o codigo
+  const phoneToCheck = senderPhone || relayPhone;
+  
+  if (!phoneToCheck) {
+    return {
+      success: false,
+      message: 'Nao foi possivel identificar o numero de telefone do relay.',
+    };
+  }
+
   // Busca o codigo de autenticacao pendente para este numero
   const authCode = await prisma.authCode.findFirst({
     where: {
-      phoneNumber: senderPhone,
+      phoneNumber: phoneToCheck,
       code,
       confirmedAt: null,
       usedAt: null,
       expiresAt: { gt: new Date() },
     },
   });
+
+  logger.info('Auth code lookup', { phoneToCheck, code, found: !!authCode });
 
   if (!authCode) {
     return {
@@ -104,7 +118,7 @@ export async function handleConfirm(
   });
 
   logger.info('Auth code confirmed', { 
-    phoneNumber: senderPhone, 
+    phoneNumber: phoneToCheck, 
     code,
     roomId,
   });

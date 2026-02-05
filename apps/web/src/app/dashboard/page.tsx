@@ -89,10 +89,7 @@ export default async function DashboardPage() {
                 style={{
                   ...cardStyle,
                   cursor: 'pointer',
-                  transition: 'border-color 0.15s',
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--foreground)')}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
