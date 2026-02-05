@@ -18,6 +18,50 @@ export interface ParsedCommand {
 }
 
 /**
+ * Gera padroes de mencao do WhatsApp para o numero do bot.
+ * Retorna array de possiveis formatos de mencao.
+ * Ex: ["@5511999999999", "@+5511999999999"]
+ * 
+ * So retorna padroes se MENTION_TRIGGER_ENABLED=true e BOT_WHATSAPP_NUMBER estiver configurado.
+ */
+function getMentionPatterns(): string[] {
+  // Verifica se mencao como trigger esta habilitada
+  if (!config.bot.mentionTriggerEnabled) return [];
+  
+  const number = config.bot.whatsappNumber;
+  if (!number) return [];
+  
+  // Remove caracteres nao numericos para normalizar
+  const cleanNumber = number.replace(/\D/g, '');
+  
+  // Padroes comuns de mencao no WhatsApp
+  return [
+    `@${cleanNumber}`,           // @5511999999999
+    `@+${cleanNumber}`,          // @+5511999999999
+  ];
+}
+
+/**
+ * Verifica se o body contem uma mencao ao bot e extrai a mensagem.
+ * Retorna o texto apos a mencao, ou null se nao for mencao.
+ */
+function extractMentionMessage(body: string): string | null {
+  const patterns = getMentionPatterns();
+  if (patterns.length === 0) return null;
+  
+  const trimmedBody = body.trim();
+  
+  for (const pattern of patterns) {
+    if (trimmedBody.startsWith(pattern)) {
+      // Extrai o texto apos a mencao
+      return trimmedBody.slice(pattern.length).trim();
+    }
+  }
+  
+  return null;
+}
+
+/**
  * Parse a command message.
  * 
  * Supported formats:
@@ -28,10 +72,35 @@ export interface ParsedCommand {
  * - /ia -config             -> show-config
  * - /ia -reset              -> reset
  * - /ia -ajuda              -> help
+ * - @5511999999999 <msg>    -> ask (mencao ao numero do bot)
  */
 export function parseCommand(body: string): ParsedCommand | null {
   const prefix = config.bot.commandPrefix;
   const trimmedBody = body.trim();
+  
+  // Primeiro verifica mencao ao numero do WhatsApp
+  const mentionMessage = extractMentionMessage(trimmedBody);
+  if (mentionMessage !== null) {
+    // Mencao ao bot - trata como comando ask
+    if (!mentionMessage) {
+      return {
+        type: "help",
+        args: "",
+        raw: body,
+      };
+    }
+    
+    // Se a mencao for seguida de uma flag, processa como flag
+    if (mentionMessage.startsWith("-")) {
+      return parseFlagCommand(mentionMessage, body);
+    }
+    
+    return {
+      type: "ask",
+      args: mentionMessage,
+      raw: body,
+    };
+  }
   
   // Check if message starts with command prefix
   if (!trimmedBody.startsWith(prefix)) {
@@ -112,14 +181,26 @@ function parseFlagCommand(afterPrefix: string, raw: string): ParsedCommand {
 }
 
 /**
- * Check if a message body starts with the command prefix.
+ * Check if a message body starts with the command prefix or is a mention to the bot.
  */
 export function isCommand(body: string): boolean {
   const prefix = config.bot.commandPrefix;
   const trimmedBody = body.trim();
   
-  // Must be exactly the prefix or prefix followed by space
-  return trimmedBody === prefix || trimmedBody.startsWith(prefix + " ");
+  // Check command prefix first
+  if (trimmedBody === prefix || trimmedBody.startsWith(prefix + " ")) {
+    return true;
+  }
+  
+  // Check mention patterns (if enabled)
+  const mentionPatterns = getMentionPatterns();
+  for (const pattern of mentionPatterns) {
+    if (trimmedBody.startsWith(pattern)) {
+      return true;
+    }
+  }
+  
+  return false;
 }
 
 /**

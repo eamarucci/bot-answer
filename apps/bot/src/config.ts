@@ -53,6 +53,8 @@ const configSchema = z.object({
     stateFile: z.string().default("data/bot-state.json"),
     roomSettingsFile: z.string().default("data/room-settings.json"),
     commandPrefix: z.string().default("/ia"),
+    whatsappNumber: z.string().optional(), // Numero do WhatsApp do bot para trigger por mencao
+    mentionTriggerEnabled: z.boolean().default(false), // Habilita mencao como gatilho
     logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   }),
 });
@@ -93,6 +95,8 @@ function loadConfig() {
       stateFile: process.env.BOT_STATE_FILE || "data/bot-state.json",
       roomSettingsFile: process.env.ROOM_SETTINGS_FILE || "data/room-settings.json",
       commandPrefix: process.env.COMMAND_PREFIX || "/ia",
+      whatsappNumber: process.env.BOT_WHATSAPP_NUMBER, // Ex: 5511999999999
+      mentionTriggerEnabled: process.env.MENTION_TRIGGER_ENABLED === "true",
       logLevel: process.env.LOG_LEVEL || "info",
     },
   };
