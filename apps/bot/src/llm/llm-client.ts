@@ -45,6 +45,7 @@ export type CompletionOptions = CompletionOptionsApi | CompletionOptionsOAuth;
 
 // Headers especificos para OAuth Anthropic (mesmos do OpenCode/claude-cli)
 const ANTHROPIC_OAUTH_HEADERS = {
+  "anthropic-version": "2023-06-01",
   "anthropic-beta": "oauth-2025-04-20,interleaved-thinking-2025-05-14",
   "user-agent": "claude-cli/2.1.2 (external, cli)",
 };
