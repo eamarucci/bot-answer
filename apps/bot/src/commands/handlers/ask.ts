@@ -182,9 +182,9 @@ export async function handleAsk(
     };
   }
 
-  // Se o resultado trouxe um modelo especifico (config do admin/grupo), usa ele
-  // a menos que ja tenha sido setado pelo grupo via room-settings
-  if (apiKeyResult.model && !permissionResult.groupConfig?.model) {
+  // Se o resultado trouxe um modelo especifico (OAuth ou config), usa ele
+  // Isso substitui "auto" pelo modelo real do provider OAuth
+  if (apiKeyResult.model && (model === 'auto' || !permissionResult.groupConfig?.model || permissionResult.groupConfig.model === 'auto')) {
     model = apiKeyResult.model;
   }
 
