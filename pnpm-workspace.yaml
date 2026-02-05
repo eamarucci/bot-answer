@@ -1,5 +1,10 @@
 packages:
-  - apps/*
-  - packages/*
+  - 'apps/*'
+  - 'packages/*'
 
-onlyBuiltDependencies: '["@prisma/client", "@prisma/engines", "prisma", "esbuild"]'
+onlyBuiltDependencies:
+  - '@matrix-org/matrix-sdk-crypto-nodejs'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - 'prisma'
+  - 'esbuild'

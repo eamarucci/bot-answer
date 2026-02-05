@@ -1,6 +1,7 @@
 FROM node:20-slim AS builder
 
-# Install pnpm
+# Install pnpm and openssl for native modules
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
@@ -17,7 +18,11 @@ COPY packages/database/package.json ./packages/database/
 # Copy bot package
 COPY apps/bot/package.json ./apps/bot/
 
-# Install all dependencies
+# Copy npmrc for build config
+COPY .npmrc ./
+
+# Install all dependencies with native module support
+ENV PNPM_ALLOW_BUILD_SCRIPTS=true
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
@@ -50,7 +55,13 @@ COPY packages/database/package.json ./packages/database/
 COPY packages/database/prisma/ ./packages/database/prisma/
 COPY apps/bot/package.json ./apps/bot/
 
-# Install all dependencies (need prisma cli to generate client)
+# Install all dependencies with native module support  
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+# Copy npmrc for build config
+COPY .npmrc ./
+
+ENV PNPM_ALLOW_BUILD_SCRIPTS=true
 RUN pnpm install --frozen-lockfile
 
 # Generate Prisma client
