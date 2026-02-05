@@ -177,6 +177,9 @@ export async function getApiKey(
 /**
  * Verifica se o admin tem OAuth configurado e se é compativel com o modelo solicitado.
  * Retorna a config OAuth se aplicavel, ou null se nao.
+ * 
+ * Para vision: Claude e GPT-4o suportam vision nativamente, entao OAuth tem prioridade
+ * sobre modelos de vision especificos do OpenRouter.
  */
 function getOAuthForAdmin(
   adminId: string,
@@ -193,8 +196,12 @@ function getOAuthForAdmin(
   
   const modelLower = requestedModel?.toLowerCase() || '';
   
-  // Se nao tem modelo especificado, usa OAuth se disponivel
-  const noModelSpecified = !requestedModel || requestedModel === 'auto';
+  // Se nao tem modelo especificado OU é um modelo de vision do OpenRouter, considera como "auto"
+  // Isso permite que OAuth tenha prioridade para vision (Claude/GPT-4o suportam vision)
+  const isOpenRouterVisionModel = modelLower.includes('nvidia') || 
+                                   modelLower.includes('nemotron') ||
+                                   modelLower.includes('vision');
+  const noModelSpecified = !requestedModel || requestedModel === 'auto' || isOpenRouterVisionModel;
   
   // Se o modelo explicitamente pede Anthropic/Claude
   const wantsAnthropic = modelLower.includes('claude') || 
@@ -209,6 +216,7 @@ function getOAuthForAdmin(
                       modelLower.startsWith('o3');
 
   // Tenta Anthropic OAuth primeiro (se disponivel e compativel)
+  // Claude suporta vision nativamente, entao funciona para isVision=true
   if (adminData.anthropicOAuthRefresh && (wantsAnthropic || (!wantsOpenAI && noModelSpecified))) {
     // Usa modelo selecionado pelo admin ou default do .env
     const model = adminData.anthropicOAuthModel || config.oauthModels.anthropic;
@@ -224,6 +232,7 @@ function getOAuthForAdmin(
   }
 
   // Tenta OpenAI OAuth (se disponivel e compativel)
+  // GPT-4o suporta vision nativamente
   if (adminData.openaiOAuthRefresh && (wantsOpenAI || (!wantsAnthropic && noModelSpecified))) {
     // Usa modelo selecionado pelo admin ou default do .env
     const model = adminData.openaiOAuthModel || config.oauthModels.openai;

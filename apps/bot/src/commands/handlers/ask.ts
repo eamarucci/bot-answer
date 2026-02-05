@@ -90,10 +90,10 @@ export async function handleAsk(
           };
         }
         
-        // Switch to vision model automatically
-        model = config.models.vision;
-        logger.info("Media detected, switching to vision model", { 
-          model, 
+        // Nao forca modelo aqui - deixa getApiKey decidir baseado na auth disponivel
+        // Se tiver OAuth, usa Claude (que suporta vision)
+        // Se nao, vai usar o modelo de vision do .env via fallback
+        logger.info("Media detected", { 
           mediaType: media.type,
           size: media.size 
         });
@@ -184,8 +184,19 @@ export async function handleAsk(
 
   // Se o resultado trouxe um modelo especifico (OAuth ou config), usa ele
   // Isso substitui "auto" pelo modelo real do provider OAuth
-  if (apiKeyResult.model && (model === 'auto' || !permissionResult.groupConfig?.model || permissionResult.groupConfig.model === 'auto')) {
+  // Tambem substitui quando temos midia (vision) e OAuth, pois Claude/GPT-4o suportam vision
+  const shouldUseOAuthModel = apiKeyResult.model && (
+    model === 'auto' || 
+    !permissionResult.groupConfig?.model || 
+    permissionResult.groupConfig.model === 'auto' ||
+    (isVision && apiKeyResult.type === 'oauth') // OAuth tem prioridade para vision
+  );
+  
+  if (shouldUseOAuthModel && apiKeyResult.model) {
     model = apiKeyResult.model;
+  } else if (isVision && apiKeyResult.type === 'api') {
+    // Se nao tem OAuth mas tem midia, usa modelo de vision do .env
+    model = config.models.vision;
   }
 
   const provider: ProviderId = apiKeyResult.provider;
