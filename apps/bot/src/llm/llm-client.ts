@@ -53,6 +53,11 @@ const ANTHROPIC_OAUTH_HEADERS = {
 // URL para OAuth Anthropic (com beta=true)
 const ANTHROPIC_OAUTH_URL = "https://api.anthropic.com/v1/messages?beta=true";
 
+// Prefixo OBRIGATORIO para OAuth Anthropic funcionar
+// A API da Anthropic valida que o system prompt comeca com essa frase
+// quando usando credenciais OAuth do Claude Code
+const CLAUDE_CODE_SYSTEM_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+
 /**
  * Converte mensagens do formato OpenAI para formato Anthropic
  */
@@ -233,6 +238,10 @@ async function createChatCompletionOAuth(
 
 /**
  * Completion usando OAuth Anthropic (Claude Pro/Max)
+ * 
+ * IMPORTANTE: OAuth do Claude Code requer que o system prompt comece com
+ * "You are Claude Code, Anthropic's official CLI for Claude."
+ * Caso contrario a API retorna erro 400: "This credential is only authorized for use with Claude Code"
  */
 async function createAnthropicOAuthCompletion(
   messages: ChatMessage[],
@@ -248,10 +257,16 @@ async function createAnthropicOAuthCompletion(
   // Converte mensagens para formato Anthropic
   const { system, messages: anthropicMessages } = convertToAnthropicFormat(messages);
 
+  // Adiciona prefixo obrigatorio para OAuth funcionar
+  // A API valida que o system prompt comeca com essa frase especifica
+  const oauthSystem = system 
+    ? `${CLAUDE_CODE_SYSTEM_PREFIX}\n\n${system}`
+    : CLAUDE_CODE_SYSTEM_PREFIX;
+
   const requestBody = {
     model,
     max_tokens: config.llm.maxTokens,
-    system,
+    system: oauthSystem,
     messages: anthropicMessages,
   };
 
