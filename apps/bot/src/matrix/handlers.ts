@@ -136,12 +136,24 @@ export async function handleMessage(
     const relayNumber = await getRelayPhoneForRoom(roomId);
     const relayMatrixId = relayNumber ? `@whatsapp_${relayNumber}:${config.matrix.userId.split(':')[1]}` : null;
     
+    // Extrai o servidor do bot para comparar mencoes
+    const botServer = config.matrix.userId.split(':')[1];
+    
+    logger.debug("Checking mention", { 
+      mentionedUsers, 
+      botUserId: config.matrix.userId,
+      relayMatrixId,
+      relayNumber,
+    });
+    
     isBotMention = mentionedUsers.some(userId => {
       // Mencao direta ao bot Matrix
       if (userId === config.matrix.userId) return true;
-      // Mencao ao relay do WhatsApp
+      // Mencao ao relay do WhatsApp (que é o "bot" no grupo)
       if (relayMatrixId && userId === relayMatrixId) return true;
-      // Mencao a qualquer usuario @bot* ou @whatsapp* que seja o relay
+      // Mencao a qualquer usuario @bot* no mesmo servidor (pode ser alias)
+      if (userId.startsWith('@bot') && userId.endsWith(`:${botServer}`)) return true;
+      // Mencao a qualquer usuario @whatsapp* que contenha o numero do relay
       if (relayNumber && userId.includes(relayNumber)) return true;
       return false;
     });
